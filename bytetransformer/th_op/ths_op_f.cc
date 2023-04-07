@@ -25,7 +25,7 @@ namespace torch_ths {
 
 using torch::Tensor;
 
-Tensor TransformerEncoder(int64_t head_num, int64_t head_size, Tensor qkv_kernel, Tensor qkv_bias,
+std::tuple<Tensor, Tensor, Tensor> TransformerEncoder(int64_t head_num, int64_t head_size, Tensor qkv_kernel, Tensor qkv_bias,
                           Tensor attr_output_kernel, Tensor attr_output_bias,
                           Tensor attr_output_layernorm_gamma, Tensor attr_output_layernorm_beta,
                           Tensor inter_kernel, Tensor inter_bias, Tensor output_kernel,
@@ -63,7 +63,7 @@ Tensor TransformerEncoder(int64_t head_num, int64_t head_size, Tensor qkv_kernel
                               output_layernorm_gamma,
                               output_layernorm_beta};
   auto output = torch::empty_like(input);
-
+  // cal_buf_size()
   torch_ext::IBTEncoder *btencoder = nullptr;
   switch (_st) {
     case at::ScalarType::Float:
@@ -75,11 +75,31 @@ Tensor TransformerEncoder(int64_t head_num, int64_t head_size, Tensor qkv_kernel
     default:
       throw std::runtime_error("Wrong Tensor type.");
   }
-
-  btencoder->forward(batch_size, seq_len, input, attr_mask, output, is_remove_padding,
+  auto buf_tensor =
+    torch::empty({(long int)btencoder->get_buf_size(batch_size, seq_len, is_remove_padding, use_fused_attention)}, torch::dtype(torch::kInt8).device(torch::kCUDA));
+  void *buf = bytetransformer::torch_ext::get_ptr<void>(buf_tensor);
+  btencoder->forward(batch_size, seq_len, input, attr_mask, output, buf, is_remove_padding,
                      use_fused_attention);
   delete btencoder;
-  return output;
+  int input_tensor_size = batch_size * head_num * seq_len * head_size;
+
+  Tensor k_cache;
+  Tensor v_cache;
+  switch (_st) {
+    case at::ScalarType::Float:
+      k_cache = torch::from_blob((float*)buf + 1 * input_tensor_size,input_tensor_size,torch::dtype(input.dtype()).device(torch::kCUDA));
+      v_cache = torch::from_blob((float*)buf + 2 * input_tensor_size,input_tensor_size,torch::dtype(input.dtype()).device(torch::kCUDA));
+      return {output, k_cache, v_cache};
+      break;
+    case at::ScalarType::Half:
+      k_cache = torch::from_blob((half*)buf + 1 * input_tensor_size,input_tensor_size,torch::dtype(input.dtype()).device(torch::kCUDA));
+      v_cache = torch::from_blob((half*)buf + 2 * input_tensor_size,input_tensor_size,torch::dtype(input.dtype()).device(torch::kCUDA));
+      return {output, k_cache, v_cache};
+      break;
+    default:
+      throw std::runtime_error("Wrong Tensor type.");
+  }
+
 }
 
 static auto registry = torch::RegisterOperators(
@@ -91,7 +111,7 @@ static auto registry = torch::RegisterOperators(
     "Tensor inter_kernel, Tensor inter_bias, Tensor output_kernel, Tensor output_bias,"
     "Tensor output_layernorm_gamma, Tensor output_layernorm_beta, Tensor input, Tensor attr_mask,"
     "bool is_remove_padding = True, bool use_fused_attention = True) -> "
-    "Tensor",
+    "(Tensor,Tensor,Tensor)",
     &TransformerEncoder);
 
 }  // namespace torch_ths

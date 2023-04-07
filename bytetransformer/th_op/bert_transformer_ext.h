@@ -32,9 +32,11 @@ class IBTEncoder {
   virtual ~IBTEncoder() {
   }
   virtual void forward(int batch_size, int seq_len, Tensor &input, Tensor &attr_mask,
-                       Tensor &output, bool is_remove_padding, bool use_fused_attention,
+                       Tensor &output, void* buf, bool is_remove_padding, bool use_fused_attention,
                        const ModelType model_type = ModelType::Bert,
                        const Tensor attention_bias = Tensor()) = 0;
+  virtual unsigned long long get_buf_size(int batch_size, int seq_len, bool is_remove_padding = true, bool use_fused_attention = true, const ModelType model_type = ModelType::Bert) = 0;
+
 };
 
 template <typename T>
@@ -77,7 +79,7 @@ class BTEncoder : public IBTEncoder {
     }
   }
 
-  void forward(int batch_size, int seq_len, Tensor &input, Tensor &attr_mask, Tensor &output,
+  void forward(int batch_size, int seq_len, Tensor &input, Tensor &attr_mask, Tensor &output, void *buf,
                bool is_remove_padding = true, bool use_fused_attention = true,
                const ModelType model_type = ModelType::Bert,
                const Tensor attention_bias = Tensor()) override {
@@ -94,11 +96,6 @@ class BTEncoder : public IBTEncoder {
 
     at::cuda::CUDAGuard device_guard{input.device().index()};
 
-    unsigned long long buf_size = encoder->cal_bufsize();
-    auto buf_tensor =
-        torch::empty({(long int)buf_size}, torch::dtype(torch::kInt8).device(torch::kCUDA));
-    void *buf = get_ptr<void>(buf_tensor);
-
     cudaStream_t stream = at::cuda::getCurrentCUDAStream().stream();
     cublasHandle_t cublas_handle = at::cuda::getCurrentCUDABlasHandle();
     struct BertTransformerInferParam<T> infer_param {
@@ -108,6 +105,14 @@ class BTEncoder : public IBTEncoder {
 
     encoder->infer(infer_param);
     delete encoder;
+  }
+
+  unsigned long long get_buf_size(int batch_size, int seq_len, bool is_remove_padding = true, bool use_fused_attention = true, const ModelType model_type = ModelType::Bert) {
+    BertTransformer<THTraits<T>::OpType> *encoder = new BertTransformer<THTraits<T>::OpType>(
+        batch_size, _head_num, _head_size, seq_len, use_fused_attention, is_remove_padding, _use_fp32, model_type);
+    unsigned long long buf_size = encoder->cal_bufsize();
+    delete encoder;
+    return buf_size;
   }
 
  private:

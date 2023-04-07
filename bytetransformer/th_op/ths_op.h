@@ -21,6 +21,7 @@
 #include <torch/custom_class.h>
 #include "bert_transformer_ext.h"
 #include "util.h"
+#include <iostream>
 
 namespace bytetransformer {
 namespace torch_ths {
@@ -91,9 +92,11 @@ class BertTransformer : public torch::jit::CustomClassHolder {
     int seq_len = input_size[1];
 
     auto output = torch::empty_like(input);
-    btencoder->forward(batch_size, seq_len, input, attr_mask, output, is_remove_padding,
+    void *buf = nullptr;
+    btencoder->forward(batch_size, seq_len, input, attr_mask, output, buf, is_remove_padding,
                        use_fused_attention);
-    return output;
+    // test
+    return output; 
   }
 
   std::vector<Tensor> get_pickle_info() const {

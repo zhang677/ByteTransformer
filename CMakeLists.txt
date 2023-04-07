@@ -1,7 +1,7 @@
 cmake_minimum_required(VERSION 3.8 FATAL_ERROR)
 project(ByteTransformer LANGUAGES CXX CUDA)
 
-option(BUILD_THS "Build in TorchScript class mode" OFF)
+option(BUILD_THS "Build in TorchScript class mode" ON)
 
 add_definitions("-DCUTLASS_ATTENTION")
 
@@ -14,6 +14,7 @@ list(APPEND CMAKE_MODULE_PATH ${CUDA_HOME}/lib)
 list(APPEND CMAKE_MODULE_PATH ${CUDA_HOME}/lib64)
 find_package(CUDA REQUIRED)
 set(CUDA_PATH ${CUDA_HOME})
+
 
 if (${CUDA_VERSION} GREATER_EQUAL 11.0)
   message(STATUS "Add DCUDA11_MODE")
