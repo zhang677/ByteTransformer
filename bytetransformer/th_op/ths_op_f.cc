@@ -87,13 +87,13 @@ std::tuple<Tensor, Tensor, Tensor> TransformerEncoder(int64_t head_num, int64_t 
   Tensor v_cache;
   switch (_st) {
     case at::ScalarType::Float:
-      k_cache = torch::from_blob((float*)buf + 1 * input_tensor_size,input_tensor_size,torch::dtype(input.dtype()).device(torch::kCUDA));
-      v_cache = torch::from_blob((float*)buf + 2 * input_tensor_size,input_tensor_size,torch::dtype(input.dtype()).device(torch::kCUDA));
+      k_cache = torch::from_blob((float*)buf + 1 * input_tensor_size,input_tensor_size,torch::dtype(input.dtype()).device(torch::kCUDA)).view(input_size);
+      v_cache = torch::from_blob((float*)buf + 2 * input_tensor_size,input_tensor_size,torch::dtype(input.dtype()).device(torch::kCUDA)).view(input_size);
       return {output, k_cache, v_cache};
       break;
     case at::ScalarType::Half:
-      k_cache = torch::from_blob((half*)buf + 1 * input_tensor_size,input_tensor_size,torch::dtype(input.dtype()).device(torch::kCUDA));
-      v_cache = torch::from_blob((half*)buf + 2 * input_tensor_size,input_tensor_size,torch::dtype(input.dtype()).device(torch::kCUDA));
+      k_cache = torch::from_blob((half*)buf + 1 * input_tensor_size,input_tensor_size,torch::dtype(input.dtype()).device(torch::kCUDA)).view(input_size);
+      v_cache = torch::from_blob((half*)buf + 2 * input_tensor_size,input_tensor_size,torch::dtype(input.dtype()).device(torch::kCUDA)).view(input_size);
       return {output, k_cache, v_cache};
       break;
     default:
